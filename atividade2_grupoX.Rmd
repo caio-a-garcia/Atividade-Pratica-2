@@ -63,9 +63,74 @@ dados_transformados <- dados %>%
 dados_transformados
 ```
 
+2.  Realize o procedimento para obter as componentes principais deste conjunto de dados. Quantas componentes principais são necessárias para se explicar pelo menos 80% da variância dos dados?
 
+```{r Aplicando PCA}
+# Transformando tibble em dataframe
+dados_transformados <- as.data.frame(dados_transformados)
 
+# Transformando a coluna regiao em index
+row.names(dados_transformados) <- dados_transformados$regiao
 
+# Removendo a primeira coluna 
+dados_transformados <- dados_transformados[,-1]
+
+# Cálculando as componentes princiapais
+pca_result <- prcomp(dados_transformados, scale = TRUE)
+
+# Plotando gráfico de cotovelo com a biblioteca factoextra
+fviz_eig(pca_result, addlabels = TRUE, main = "Gráfico de Cotovelo")
+```
+
+O gráfico de cotovelo evidência que a soma das duas primeiras componentes principais ultrapassa 80%, indicando que essas duas componentes são capazes de explicar pelo menos 89,6% da variância total dos dados.
+
+3.  Obtenha as contribuições das preditoras para a primeira componente principal. Qual nome você daria para esta componente?
+
+```{r Contribuições para a primeira componente}
+# Obtendo as contribuições da primeira componente principal
+cp1_contr <- pca_result$rotation[, 1]
+
+# Ordenando as contribuições pelo valor absoluto
+cp1_contr_ordenado <- cp1_contr[order(abs(cp1_contr), decreasing = TRUE)]
+
+# Visualizar as contribuições ordenadas
+print(cp1_contr_ordenado)
+```
+
+Observando as contribuições dessa componente principal, percebe-se que a grande maioria das variáveis preditoras possui pesos de contribuição semelhantes, com exceção das preditoras 'OCORRÊNCIAS DE APREENSÃO DE ENTORPECENTES(1)', 'OCORRÊNCIAS DE PORTE DE ENTORPECENTES' e 'Nº DE INFRATORES APREENDIDOS POR MANDADO'. Isso sugere que essa componente principal não é significativamente influenciada por crimes menos graves, que resultam apenas em apreensão ou advertência educativa por porte. Portanto, podemos interpretar esta componente como relacionada a "crimes de infração grave".
+
+4.  Obtenha as contribuições das preditoras para a segunda componente principal. Qual nome você daria para esta componente?
+
+```{r Contribuições para a segunda componente}
+# Obtendo as contribuições da primeira componente principal
+cp2_contr <- pca_result$rotation[, 2]
+
+# Ordenando as contribuições pelo valor absoluto
+cp2_contr_ordenado <- cp2_contr[order(abs(cp2_contr), decreasing = TRUE)]
+
+# Visualizar as contribuições ordenadas
+print(cp2_contr_ordenado)
+```
+
+Os resultados referentes à segunda componente de contribuição revelam um padrão praticamente oposto ao observado na primeira componente principal. Isso sugere que essa variável pode ser interpretada como uma contraparte inversa da primeira componente, sendo designada portanto como "crimes de infração leve".
+
+No entanto, é importante destacar que a variável preditora que exerceu a maior influência nesta segunda componente não está necessariamente relacionada a um crime direto, mas sim a atos de execução de mandatos emitidos. Isso indica a necessidade de cautela ao interpretar ambas as componentes principais.
+
+5.  Faça um gráfico de dispersão com as duas primeiras componentes principais. Com base nas respostas anteriores e neste gráfico, o que pode-se dizer sobre a Capital? E sobre a região de Ribeirão Preto? E Sorocaba?
+
+```{r Gráfico de Dispersão}
+# Plotando gráfico de dispersão
+fviz_pca_biplot(pca_result, repel = TRUE, xlab = "PC1",
+ ylab = "PC2")
+```
+
+A partir da análise do gráfico, observamos que a capital apresenta um comportamento distintivo em comparação com as demais cidades. Aparentemente, possui uma taxa mais baixa de "crimes de infração grave" e uma taxa mais elevada de "crimes de infração leve". Por outro lado, a região de Ribeirão Preto também se destaca em relação à maioria das outras cidades, exibindo uma baixa taxa de "crimes de infração leve" e uma taxa de "crimes de infração grave" não tão pequena quanto a capital, mas inferior às demais cidades.
+
+No caso de Sorocaba, aparentemente, há um equilíbrio entre essas duas novas variáveis de infração geradas a partir das componentes principais.
+
+6.  Análise de conglomerados
+
+-   6.1. Execute o método k-means para identificar o número ótimo de clusters entre as regiões analisadas
 
 
 
