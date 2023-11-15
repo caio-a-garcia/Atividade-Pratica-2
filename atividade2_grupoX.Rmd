@@ -130,7 +130,71 @@ No caso de Sorocaba, aparentemente, há um equilíbrio entre essas duas novas va
 
 6.  Análise de conglomerados
 
--   6.1. Execute o método k-means para identificar o número ótimo de clusters entre as regiões analisadas
+-   6.1. Execute o método k-means para identificar o número ótimo de clusters entre as regiões analisadas.
+
+```{r Método do Cotovelo}
+# Configurando semente aleatoria
+set.seed(39)
+
+# Como temos apenas 10 observações, iremos testar todas os numeros de K possiveis
+k <- 2:10
+
+# Criando tibble  
+tibble(k = k) %>% 
+
+  # Para cada valor de k, calcula a soma dos quadrados internos (withinss) usando kmeans
+  mutate(w = map_dbl(k, ~ kmeans(dados_transformados, centers = .x, nstart = 10)$tot.withinss)) %>% 
+
+  # Cria um gráfico de dispersão com uma linha conectando os pontos
+  ggplot(aes(k, w)) + 
+    geom_point() +  # Adiciona os pontos
+    scale_x_continuous(breaks = k) +  # Define as quebras no eixo x
+    geom_line()  # Adiciona uma linha conectando os ponto
+
+```
+Analisando o gráfico gerado, o número ótimo de cluster aparentemente é com 4 grupos.
+
+```{r Executando Kmeand}
+# Executando K-means com o numero ótimo de clusters
+k_medias <- kmeans(dados_transformados, 
+                   centers = 4)
+# 
+kmeans_labels <- k_medias$cluster
+
+kmeans_labels
+```
+
+
+-   6.2. Execute o método k-means para identificar o número ótimo de clusters entre as regiões analisadas.
+
+```{r}
+# Obtendo as coordenadas do PCA
+dados_pca <- pca_result$x
+
+# Adicionar rótulos de cluster aos resultados do PCA
+dados_pca_kmeans <- cbind(dados_pca, Cluster = as.factor(kmeans_labels))
+
+# Converter a matriz para um data.frame
+dados_pca_kmeans_df <- as.data.frame(dados_pca_kmeans)
+
+# Plotando grafico de dispersão 
+ggplot(dados_pca_kmeans_df, aes(x = PC1, y = PC2, color = Cluster, label = rownames(dados_pca_kmeans_df))) +
+  geom_point(size = 3) +
+  geom_text(nudge_y = 0.1, nudge_x = 0.1, size = 3, show.legend = FALSE) +
+  labs(title = "Clusters Obtidos pelo K-means após PCA",
+       x = "Primeira Componente Principal",
+       y = "Segunda Componente Principal",
+       color = "Cluster") +
+  theme_minimal() +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "black") +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "black")
+```
+-   6.3. Analise os resultados dos métodos de clusterização e interprete os grupos obtidos;
+
+
+-   6.4. Discuta as implicações práticas dos grupos identificados, considerando possíveis ações que a Secretaria de Segurança Pública de São Paulo pode realizar.
+
+
 
 
 
