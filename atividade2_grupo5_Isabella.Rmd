@@ -1,0 +1,308 @@
+```{r setup, include=FALSE, echo=FALSE}
+knitr::opts_chunk$set(echo = TRUE, cache = TRUE, warning = FALSE, message = FALSE)
+knitr::opts_knit$set(copy.extra = TRUE)
+```
+
+# Atividade prática 2: Produtividade Policial - Grupo 5
+
+Caio Garcia, Isabella Gobbi e Murilo Cechin
+
+## Introdução
+
+Este Rmarkdown tem o objetivo de responder as perguntas da atitivade prática 2 de Aprendizagem Estatística de Máquina II.
+
+### Bibliotecas
+
+Importando as bibliotecas utilizadas neste projeto:
+
+```{r}
+library(tidyverse)
+library(readxl)
+library(stringi)
+library(factoextra)
+library(ggrepel)
+library(knitr)
+library(kableExtra)
+```
+
+### Manipulação dos Dados
+
+Realizando as manipulações previstas no documento disponibilizado no blackboard:
+
+```{r}
+#Leitura e visualização de amostra:
+dados <- read_xlsx("produtividade_policial.xlsx")
+
+sample_dados <- dados %>% 
+                sample_n(10)
+
+rmarkdown::paged_table(sample_dados)
+
+```
+
+Removendo os caracteres especiais do nome das colunas e os deixando em letras minúsuculas conforme documento do blackboard:
+
+```{r}
+dados <- dados %>% 
+  rename_with(~ stri_trans_general(.x, "Latin-ASCII") %>% 
+                tolower())
+```
+
+### Tarefas
+
+**1. Para este exercício, manipule os dados para considerar apenas os dados totais de cada indicador para cada região. Forneça o código que deixa os dados no seguinte formato (conforme imagem):**
+
+```{r, warning=FALSE}
+# Realizando as transformações necessarias
+prod_policial <- dados %>%
+  pivot_longer(cols = jan:dez, names_to = "mes", values_to = "indicador") %>%
+  group_by(regiao, ocorrencia, mes) %>%
+  summarise(total = sum(indicador, na.rm = TRUE)) %>%
+  group_by(regiao, ocorrencia) %>%
+  summarise(total = sum(total, na.rm = TRUE)) %>%
+  pivot_wider(names_from = "ocorrencia", values_from = "total")
+
+rmarkdown::paged_table(head(prod_policial))
+
+```
+**2. Realize o procedimento para obter as componentes principais deste conjunto de dados. Quantas componentes principais são necessárias para se explicar pelo menos 80% da variância dos dados?**
+
+Normalizando e escalonando os dados, visto que estão em unidades de medida diferentes: 
+
+```{r}
+X <- prod_policial %>%
+  column_to_rownames(var = "regiao") %>%
+  scale(center = TRUE, scale = TRUE)
+
+X_df <- X %>% 
+           as.data.frame()
+
+rmarkdown::paged_table(head(X_df))
+```
+
+Aplicando o PCA:
+
+```{r}
+pca <- prcomp(X)
+
+pcadf <- as.data.frame(pca$rotation)
+
+rmarkdown::paged_table(head(pcadf))
+```
+Trocando o sinal das cargas e dos scores para facilitar a compreensão, visto que a PC1 apresenta todos os phis negativos:
+
+```{r}
+pca$rotation <- -pca$rotation 
+pca$x <- -pca$x 
+```
+
+Definindo a matriz de cargas Phi:
+
+```{r}
+Phi <- pca$rotation 
+
+Phidf <- as.data.frame(Phi)
+
+rmarkdown::paged_table(head(Phidf))
+```
+
+Confirmando que a soma das cargas totaliza 1, de acordo com restrição imposta:
+
+```{r}
+apply(Phi, 2, function(col) sum(col^2))%>%
+  t() %>% 
+  kable() %>%
+  kable_styling() 
+```
+Definindo as projeções:
+
+```{r}
+Z <- pca$x 
+
+Zdf <- as.data.frame(Z)
+
+rmarkdown::paged_table(head(Zdf))
+```
+
+Gráfico com o percentual explicado da variância a cada componente:
+
+```{r}
+fviz_eig(pca, addlabels = TRUE) + 
+  labs(x = "Componente Principal",
+       y = "Percentual explicado da variancia")
+```
+
+Através desse gráfico, é possível identificar que, para obtermos pelo menos 80% de explicação da variância, são necessárias as componentes principais 1 e 2.
+
+**3. Obtenha as contribuições das preditoras para a primeira componente principal. Qual nome você daria para esta componente?**
+
+Definindo função para cálculo e exibição das contribuições e cargas:
+```{r}
+get_driver <- function(Phi, X, drv, top) {
+  tibble(Número = rownames(Phi), 
+        Carga = Phi[, drv]) %>%
+    mutate(Contribuição = 100 * Carga^2 / sum(Carga^2)) %>%
+    arrange(desc(Contribuição)) %>%
+    top_n(top)}
+
+colnames(Z) <- paste0("PC_", 1:ncol(Z))
+```
+
+Identificando os 5 índices com maiores contribuições para a PC1:
+
+```{r}
+PC1 <- get_driver(Phi, X, drv = 1, top = 5)
+
+PC1 %>% 
+kable() %>%
+kable_styling()
+```
+Visualização gráfica:
+
+```{r}
+pca %>% 
+  fviz_contrib(choice = "var", axes = 1, sort.val = "asc",
+               fill = "steelblue", color = "black") +
+  labs(x = "", title = "Contribuições dos índices para a primeira componente") +
+  coord_flip()+
+  theme(plot.title = element_text(size = 9))
+
+```
+
+*Nome atribuído à PC1:* Prisões e apreensões em flagrante
+
+**4. Obtenha as contribuições das preditoras para a segunda componente principal. Qual nome você daria para esta componente?**
+
+```{r eval=FALSE, include=FALSE}
+cargas_pca2 <- tibble(Variable = rownames(Phi), cargas_PC2 = Phi[,2])%>% 
+               arrange(desc(cargas_PC2)) %>% 
+               kable() %>%
+               kable_styling()
+```
+Identificando os 5 índices com maiores contribuições para a PC2:
+
+```{r}
+PC2 <- get_driver(Phi, X, drv = 2, top = 5)
+
+PC2 %>% 
+kable() %>%
+kable_styling()
+```
+Visualização gráfica:
+
+```{r}
+pca %>% 
+  fviz_contrib(choice = "var", axes = 2, sort.val = "asc",
+               fill = "steelblue", color = "black") +
+  labs(x = "", title = "Contribuições dos índices para a segunda componente") +
+  coord_flip()+
+    theme(plot.title = element_text(size = 9))
+```
+
+*Nome atribuído à PC2:* Operações com entorpecentes e mandados
+
+**5. Faça um gráfico de dispersão com as duas primeiras componentes principais. Com base nas respostas anteriores e neste gráfico, o que pode-se dizer sobre a Capital? E sobre a região de Ribeirão Preto? E Sorocaba?**
+
+```{r fig.width=14, fig.height=10}
+fviz_pca_biplot(pca, axes = c(1, 2), repel = TRUE,
+                xlab = "PC1 - Prisões e apreensões em flagrante",
+                ylab = "PC2 - Operações com entorpecentes e mandados")
+```
+
+**Capital:** Muito acima da média em flagrantes e muito abaixo da média em operações com entorpecentes e mandados;<br>
+**Ribeirão Preto:** Muito acima da média em operações com entorpecentes e mandados e um pouco acima da média em flagrantes;<br>
+**Sorocaba:** Um pouco abaixo da média em flagrantes e um pouco acima da média em operações com entorpecentes e mandados.
+
+**6. Análise de conglomerados**
+
+**6.1. Execute o método k-means para identificar o número ótimo de clusters entre as regiões analisadas:**
+
+Reduzindo a matriz de projeções para que contenha somente as duas primeiras componentes
+
+```{r eval=FALSE, include=FALSE}
+Z80 <- Z[, 1:2] %>% 
+       as.data.frame()
+Z80
+```
+
+Avaliando o melhor número de clusters:
+
+```{r}
+set.seed(123)
+
+k <- 2:11 
+
+tibble(k = k) %>% 
+  mutate(w = map_dbl(k, ~ kmeans(X, centers = .x,
+                                 nstart = 10)$tot.withinss)) %>% 
+  ggplot(aes(k, w)) + 
+  geom_point() + 
+  scale_x_continuous(breaks = k) +
+  geom_line()+
+  ggtitle("Distância within cluster para cada k")
+```
+
+Verificando a distribuição entre os clusters:
+
+```{r}
+X <- X %>% 
+     as.data.frame()
+
+set.seed(123)
+(descricao <- X %>% 
+              mutate(cluster = factor(kmeans(X, centers = 3, nstart = 10)$cluster))) %>%
+              select(cluster) %>% 
+              arrange(desc(cluster)) #%>% 
+              #kable() %>%
+              #kable_styling()
+
+```
+Nessa etapa, observa-se que 3 é maior número de clusters possível de modo que todos contenham pelo menos duas cidades.
+
+Executando o kmeans com k = 3 e 10 chutes iniciais:
+
+```{r}
+set.seed(123)
+kmeans <- kmeans(X, 
+                   centers = 3,
+                   nstart = 10)
+```
+
+**6.2. Visualize os grupos obtidos em um gráfico de dispersão (utilize o resultado do PCA para a construção dos gráficos):**
+
+Visualizando os clusters pelo PCA:
+
+```{r}
+Z80 <- Z[, 1:2] %>% 
+  as.data.frame()
+```
+
+```{r, results = FALSE}
+set.seed(123)
+(descricao <- Z80 %>% 
+  mutate(cluster = factor(kmeans(Z80, centers = 3, nstart = 10)$cluster)))
+```
+
+```{r, fig.width=10}
+descricao %>% 
+  ggplot(aes(PC_1, PC_2, color = cluster)) + 
+  geom_point() +
+  xlab("Prisões e apreensões em flagrante") +
+  ylab("Operações com entorpecentes e mandados") 
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
