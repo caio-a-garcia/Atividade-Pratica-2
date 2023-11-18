@@ -1,45 +1,51 @@
 ---
-title: "atividade2_grupoX"
-author: "Caio, Isabella e Murilo"
-date: "2023-11-13"
+title: "Atividade Prática 2 - Grupo 5"
+author: "Murilo Cechin, Caio Garcia e Isabella Gobbi"
+date: "2023-11-17"
 output: html_document
 ---
 
-# Atividade prática 2 - Produtividade Policial - Grupo X
+```{r setup, include=FALSE, echo=FALSE}
+knitr::opts_chunk$set(echo = TRUE, cache = TRUE, warning = FALSE, message = FALSE)
+knitr::opts_knit$set(copy.extra = TRUE)
+```
 
-## Introdução
+# Introdução
 
-Este Rmarkdown tem o objetivo de responder as perguntas da atitivade 2 de Aprendizado de Maquina II.
+Este Rmarkdown tem o objetivo de responder as perguntas da atitivade prática 2 de Aprendizagem Estatística de Máquina II.
 
 ## Bibliotecas
 
-Todas as bibliotecas utilizadas neste projeto:
+Importando as bibliotecas utilizadas neste projeto:
 
-```{r Bibliotecas, echo=True, results='hide'}
-# Importando as bibliotecas utilizadas no projeto
+```{r}
 library(tidyverse)
 library(readxl)
 library(stringi)
 library(factoextra)
 library(ggrepel)
+library(knitr)
+library(kableExtra)
 ```
 
 ## Manipulação dos Dados
 
-Realizando as manipulações previstas no documento disponibilizado no blackboard.
+Realizando as manipulações previstas no documento disponibilizado no blackboard:
 
-```{r Leitura do Arquivo}
-# Lendo arquivo xlsx
+```{r}
+#Leitura e visualização de amostra:
 dados <- read_xlsx("produtividade_policial.xlsx")
 
-# Visualizando uma parte da tabela
-dados %>% 
-  sample_n(10)
+sample_dados <- dados %>% 
+                sample_n(10)
+
+rmarkdown::paged_table(sample_dados)
+
 ```
 
-Removendo os caracteres especiais do nome das columas e os deixando em letras minúsuculas conforme documento do blackboard:
+Removendo os caracteres especiais do nome das colunas e os deixando em letras minúsuculas conforme documento do blackboard:
 
-```{r Ajustando nome das colunas}
+```{r}
 dados <- dados %>% 
   rename_with(~ stri_trans_general(.x, "Latin-ASCII") %>% 
                 tolower())
@@ -47,11 +53,11 @@ dados <- dados %>%
 
 ## Tarefas
 
-1.  Para este exercício, manipule os dados para considerar apenas os dados totais de cada indicador para cada região. Forneça o código que deixa os dados no seguinte formato.
+**1. Para este exercício, manipule os dados para considerar apenas os dados totais de cada indicador para cada região. Forneça o código que deixa os dados no seguinte formato (conforme imagem):**
 
-```{r Realizando Transformações, warning=FALSE}
+```{r, warning=FALSE}
 # Realizando as transformações necessarias
-dados_transformados <- dados %>%
+prod_policial <- dados %>%
   pivot_longer(cols = jan:dez, names_to = "mes", values_to = "indicador") %>%
   group_by(regiao, ocorrencia, mes) %>%
   summarise(total = sum(indicador, na.rm = TRUE)) %>%
@@ -60,17 +66,256 @@ dados_transformados <- dados %>%
   pivot_wider(names_from = "ocorrencia", values_from = "total")
 
 # Visualizando os resultados
-dados_transformados
+rmarkdown::paged_table(head(prod_policial))
+
+```
+**2. Realize o procedimento para obter as componentes principais deste conjunto de dados. Quantas componentes principais são necessárias para se explicar pelo menos 80% da variância dos dados?**
+
+Normalizando e escalonando os dados, visto que estão em unidades de medida diferentes: 
+
+```{r}
+X <- prod_policial %>%
+  column_to_rownames(var = "regiao") %>%
+  scale(center = TRUE, scale = TRUE)
+
+X_df <- X %>% 
+           as.data.frame()
+
+rmarkdown::paged_table(head(X_df))
 ```
 
+Aplicando o PCA:
+
+```{r}
+pca <- prcomp(X)
+
+pcadf <- as.data.frame(pca$rotation)
+
+rmarkdown::paged_table(head(pcadf))
+```
+
+Trocando o sinal das cargas e dos scores para facilitar a compreensão, visto que a PC1 apresenta todos os phis negativos:
+
+```{r}
+pca$rotation <- -pca$rotation
+pca$x <- -pca$x
+```
+
+Definindo a matriz de cargas Phi:
+
+```{r}
+Phi <- pca$rotation 
+
+Phidf <- as.data.frame(Phi)
+
+rmarkdown::paged_table(head(Phidf))
+```
+
+Confirmando que a soma das cargas totaliza 1, de acordo com restrição imposta:
+
+```{r}
+apply(Phi, 2, function(col) sum(col^2))%>%
+  t() %>% 
+  kable() %>%
+  kable_styling() 
+```
+
+Definindo as projeções:
+
+```{r}
+Z <- pca$x 
+
+Zdf <- as.data.frame(Z)
+
+rmarkdown::paged_table(head(Zdf))
+```
+
+Gráfico com o percentual explicado da variância a cada componente:
+
+```{r}
+fviz_eig(pca, addlabels = TRUE) + 
+  labs(x = "Componente Principal",
+       y = "Percentual explicado da variancia")
+```
+
+O gráfico de cotovelo evidencia que as duas primeiras componentes principais são capazes de explicar 89,6% da variância total dos dados.
+
+**3. Obtenha as contribuições das preditoras para a primeira componente principal. Qual nome você daria para esta componente?**
+
+Definindo função para cálculo e exibição das contribuições e cargas:
+
+```{r}
+get_driver <- function(Phi, X, drv, top) {
+  tibble(Número = rownames(Phi), 
+        Carga = Phi[, drv]) %>%
+    mutate(Contribuição = 100 * Carga^2 / sum(Carga^2)) %>%
+    arrange(desc(Contribuição)) %>%
+    top_n(top)}
+
+colnames(Z) <- paste0("PC_", 1:ncol(Z))
+```
+
+Identificando os 5 índices com maiores contribuições para a PC1:
+
+```{r}
+PC1 <- get_driver(Phi, X, drv = 1, top = 5)
+
+PC1 %>% 
+kable() %>%
+kable_styling()
+```
+
+Visualização gráfica:
+
+```{r}
+pca %>% 
+  fviz_contrib(choice = "var", axes = 1, sort.val = "asc",
+               fill = "steelblue", color = "black") +
+  labs(x = "", title = "Contribuições dos índices para a primeira componente") +
+  coord_flip()+
+  theme(plot.title = element_text(size = 9))
+
+```
+
+Observando as contribuições dessa componente principal, percebe-se que dez das treze variáveis preditoras possuem pesos de contribuição semelhantes, excetuando-se as preditoras 'OCORRÊNCIAS DE APREENSÃO DE ENTORPECENTES(1)', 'OCORRÊNCIAS DE PORTE DE ENTORPECENTES' e 'Nº DE INFRATORES APREENDIDOS POR MANDADO'. Isso sugere que essa componente principal não é significativamente influenciada por crimes menos graves, que resultam apenas em apreensão ou advertência educativa por porte. Portanto, podemos interpretar esta componente como relacionada a "crimes de infração grave".
+
+*Nome atribuído à PC1:* Crimes de infração grave
+
+**4. Obtenha as contribuições das preditoras para a segunda componente principal. Qual nome você daria para esta componente?**
+
+```{r eval=FALSE, include=FALSE}
+cargas_pca2 <- tibble(Variable = rownames(Phi), cargas_PC2 = Phi[,2])%>% 
+               arrange(desc(cargas_PC2)) %>% 
+               kable() %>%
+               kable_styling()
+```
+
+Identificando os 5 índices com maiores contribuições para a PC2:
+
+```{r}
+PC2 <- get_driver(Phi, X, drv = 2, top = 5)
+
+PC2 %>% 
+kable() %>%
+kable_styling()
+```
+
+Visualização gráfica:
+
+```{r}
+pca %>% 
+  fviz_contrib(choice = "var", axes = 2, sort.val = "asc",
+               fill = "steelblue", color = "black") +
+  labs(x = "", title = "Contribuições dos índices para a segunda componente") +
+  coord_flip() +
+    theme(plot.title = element_text(size = 9))
+```
+
+A segunda componente de contribuição mostra resultados complementares à primeira componente, motivando a designação da componente 2 como "crimes de infração leve".
+
+Para propósitos de analise é interessante notar o peso para essa componente de ações iniciadas por mandado, o que se contrasta com um peso maior para a componente 1 de ações relacionadas a flagrantes. Dessa perpectiva, parece correto dizer que mais de 80% da variação dos dados pode ser explicada por uma componente de atuação policial em situações de risco (considerando a relação de flagrantes e armas de fogo com a PC1) e uma componente de atuação coordenada por mandados.
+
+*Nome atribuído à PC2:* Crimes de infração leve
+
+**5. Faça um gráfico de dispersão com as duas primeiras componentes principais. Com base nas respostas anteriores e neste gráfico, o que pode-se dizer sobre a Capital? E sobre a região de Ribeirão Preto? E Sorocaba?**
+
+```{r fig.width=14, fig.height=10}
+fviz_pca_biplot(pca, axes = c(1, 2), repel = TRUE,
+                xlab = "PC1 - Crimes de infração grave",
+                ylab = "PC2 - Crimes de infração leve")
+```
+
+Observando o gráfico acima, a capital apresenta o menor valor para "crimes de infração leve" e o maior valor para "crime de infração grave", sugerindo forte atuação da polícia nas ruas. Já Ribeirão Preto apresenta o maior valor de "crimes de infração leve" e valor não muito acima da mádia para "crimes de infracção grave", sugerindo maior número de ocorrências policiais com grupos grandes. Sorocaba apresenta valores próximos á media para ambos os componentes.
+
+**6. Análise de conglomerados**
+
+**6.1. Execute o método k-means para identificar o número ótimo de clusters entre as regiões analisadas:**
+
+Avaliando o melhor número de clusters:
+
+```{r}
+# Configura semente aleatoria
+set.seed(123)
+
+# Como temos apenas 10 observações, testamos todas os K's possíveis
+k <- 2:11 
+
+# Cria tibble
+tibble(k = k) %>%
+  
+  # Para cada valor de k, calcula a soma dos quadrados internos (withinss) usando kmeans
+  mutate(w = map_dbl(k, ~ kmeans(X, centers = .x,
+                                 nstart = 10)$tot.withinss)) %>% 
+  
+  # Cria um gráfico de dispersão com uma linha conectando os pontos
+  ggplot(aes(k, w)) + 
+  geom_point() +  # Adiciona os pontos
+  scale_x_continuous(breaks = k) + # Define as quebras no eixo x
+  geom_line() + # Adiciona uma linha conectando os ponto
+  ggtitle("Distância intra-cluster para cada k") # Define o título do gráfico
+```
+
+Verificando a distribuição entre os clusters:
+
+```{r}
+X <- X %>% 
+     as.data.frame()
+
+set.seed(123)
+(descricao <- X %>% 
+              mutate(cluster = factor(kmeans(X, centers = 3, nstart = 10)$cluster))) %>%
+              select(cluster) %>% 
+              arrange(desc(cluster)) #%>% 
+              #kable() %>%
+              #kable_styling()
+
+```
+
+Nessa etapa, observa-se que 3 é maior número de clusters possível de modo que todos contenham pelo menos duas cidades.
+
+Executando o kmeans com k = 3 e 10 chutes iniciais:
+
+```{r}
+set.seed(123)
+kmeans <- kmeans(X, 
+                   centers = 3,
+                   nstart = 10)
+```
+
+**6.2. Visualize os grupos obtidos em um gráfico de dispersão (utilize o resultado do PCA para a construção dos gráficos):**
 
 
+Reduzindo a matriz de projeções para que contenha somente as duas primeiras componentes
 
+```{r}
+Z80 <- Z[, 1:2] %>% 
+  as.data.frame()
+```
 
+Visualizando os clusters pelo PCA:
 
+```{r, results = FALSE}
+set.seed(123)
+(descricao <- Z80 %>% 
+  mutate(cluster = factor(kmeans(Z80, centers = 3, nstart = 10)$cluster)))
+```
 
+```{r, fig.width=10}
+descricao %>% 
+  ggplot(aes(PC_1, PC_2, color = cluster)) + 
+  geom_point(size = 2) +
+  xlab("Crimes de infração grave") +
+  ylab("Crimes de infração leve") 
+```
 
+**6.3. Analise os resultados dos métodos de clusterização e interprete os grupos obtidos:**
 
+O primeiro cluster, composto pela capital e grande São Paulo, apresenta valores para crimes de infração grave acentuadamente maiores que os outros dois clusters. Já estes seguem a mesma tendência entre si: maiores valores para uma componente se correlacionam com maiores valores para a outro. Cada ponto do cluster 2 tem valores menores para ambas as componentes, quando comparado com os pontos do cluster 3.
 
+**6.4. Discuta as implicações práticas dos grupos identificados, considerando possíveis ações que a Secretaria de Segurança Pública de São Paulo pode realizar:**
 
+Grande São Paulo e capital apresentam perfil de performance policial muito diferente das outras cidades analisadas, parecendo ser caracterizado por maior presença das forcas policiais nas ruas e maior incidencia de armas em ocorrências policiais. Essa caracterização desse perfil evidencia um risco desproporcional de situações violentas em ocorrências policiais no primeiro cluster, que talvez possam ser mitigadas com estratégias de de-escalação de conflitos. O motivo subjacente para a presença de armas nesse cluster talvez possa guiar outras ações concretas a serem tomadas nesse cluster.
 
+Os clusteres 2 e 3 apresentam correlação positiva entre crimes de infração grave e crimes de infração leve, sendo que o cluster 3 apresenta valores maiores para ambos enquanto o cluster 2 apresenta maior aumento médio de crimes de infração grave para determinado aumento na componente de crimes de infração leve. Se interpretarmos essa relação entre os parametros do cluster 2 como uma maior frequência de escalação de conflito, estratégias de de-escalação de conflito como as sugeridas para o cluster 1 podem ajudar a diminuir a incidencia de crimes de infracção grave no cluster 2. 
+
+Para o cluster 3, políticas públicas visando a educação da população a respeito da posse e uso de entorpecentes podem vir a ser mais efetivas, com potencial de diminuir a média estadual de crimes de infração leve.
